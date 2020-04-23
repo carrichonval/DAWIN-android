@@ -33,6 +33,9 @@ public class MainActivity extends AppCompatActivity {
     private MapView map = null;
     private String jsonData;
 
+    //Database
+    SQLiteDataBaseHelper db;
+
     //Liste des villes
     List<String> villes = new ArrayList<>();
 
@@ -43,6 +46,14 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        //DATABASE
+        //db = new SQLiteDataBaseHelper(this);
+        VilleDAO villeDAO = new VilleDAO(this);
+        villeDAO.open();
+
+        StationDAO stationDAO = new StationDAO(this);
+        stationDAO.open();
 
         Context ctx = getApplicationContext();
         Configuration.getInstance().load(ctx, PreferenceManager.getDefaultSharedPreferences(ctx));
@@ -76,6 +87,7 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     JSONObject obj = json.getJSONObject(i);
                     String ville = obj.getString("name");
+                    villeDAO.addVille(new Ville(i, ville));
                     villes.add(ville);
                 } catch (JSONException e) {
                     e.printStackTrace();
@@ -108,6 +120,7 @@ public class MainActivity extends AppCompatActivity {
                         JSONObject position = object.getJSONObject("position");
                         Double latitude = position.getDouble("lat");
                         Double longitude = position.getDouble("lng");
+                        stationDAO.addStation(new Station(i,adresse,0,latitude,longitude));
                         items.add(new OverlayItem(adresse, nbBike, new GeoPoint(latitude,longitude))); // Lat/Lon decimal degrees
                     } catch (JSONException e) {
                         e.printStackTrace();
@@ -143,6 +156,8 @@ public class MainActivity extends AppCompatActivity {
         mapController.setZoom(15);
         GeoPoint startPoint = new GeoPoint(48.8583, 2.2944);
         mapController.setCenter(startPoint);
+        villeDAO.close();
+        stationDAO.close();
     }
 
     @Override
