@@ -7,8 +7,13 @@ import androidx.core.content.ContextCompat;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.util.Log;
+import android.view.ActionProvider;
 
 
 import org.json.JSONArray;
@@ -33,8 +38,6 @@ public class MainActivity extends AppCompatActivity {
     private MapView map = null;
     private String jsonData;
 
-    //Database
-    SQLiteDataBaseHelper db;
 
     //Liste des villes
     List<String> villes = new ArrayList<>();
@@ -48,10 +51,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         //DATABASE
-        //db = new SQLiteDataBaseHelper(this);
         VilleDAO villeDAO = new VilleDAO(this);
         villeDAO.open();
-
         StationDAO stationDAO = new StationDAO(this);
         stationDAO.open();
 
@@ -62,74 +63,108 @@ public class MainActivity extends AppCompatActivity {
         map = (MapView) findViewById(R.id.MAP);
         map.setTileSource(TileSourceFactory.MAPNIK);
 
+
         requestPermissionsIfNecessary(new String[] {
-                // if you need to show the current location, uncomment the line below
-                // Manifest.permission.ACCESS_FINE_LOCATION,
-                // WRITE_EXTERNAL_STORAGE is required in order to show the map
                 Manifest.permission.WRITE_EXTERNAL_STORAGE
         });
 
-        //Récupération de la liste des villes de l'api
-        String requete2 = "https://api.jcdecaux.com/vls/v3/contracts?apiKey=7886a12c53604b2668a08582a04795afcc9375b0";
-        GetData gt = new GetData();
-        try {
-            jsonData = gt.execute(requete2).get();
-        }catch (InterruptedException e){
-            e.printStackTrace();
-        }catch (ExecutionException e){
-            e.printStackTrace();
-        }
-        try {
-            JSONArray json = new JSONArray(jsonData);
+        //verification de la connexion
+        if(isNetworkAvailable()){
 
-            for (int i=0; i < json.length(); i++)
-            {
-                try {
-                    JSONObject obj = json.getJSONObject(i);
-                    String ville = obj.getString("name");
-                    villeDAO.addVille(new Ville(i, ville));
-                    villes.add(ville);
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-            }
-        }catch(JSONException e){
-            e.printStackTrace();
-        }
+            //suppresion des données dans les tables
+            villeDAO.dropVilles();
+            stationDAO.dropStations();
 
-        //Récupération des stations de chaques villes
-        for (String ville: villes) {
+            //Récupération de la liste des villes de l'api
+            String requete2 = "https://api.jcdecaux.com/vls/v3/contracts?apiKey=7886a12c53604b2668a08582a04795afcc9375b0";
+            GetData gt = new GetData();
             try {
-                String url = "https://api.jcdecaux.com/vls/v1/stations?contract="+ ville +"&apiKey=7886a12c53604b2668a08582a04795afcc9375b0";
+                jsonData = gt.execute(requete2).get();
+            }catch (InterruptedException e){
+                e.printStackTrace();
+            }catch (ExecutionException e){
+                e.printStackTrace();
+            }
+            try {
+                JSONArray json = new JSONArray(jsonData);
 
-                String jsonLocation = null;
-                GetData gl = new GetData();
-                try {
-                    jsonLocation = gl.execute(url).get();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } catch (ExecutionException e) {
-                    e.printStackTrace();
-                }
-                JSONArray json = new JSONArray(jsonLocation);
-                for (int i = 0; i < json.length(); ++i){
+                for (int i=0; i < json.length(); i++)
+                {
                     try {
-                        JSONObject object = json.getJSONObject(i);
-                        String adresse = object.getString("address");
-                        String nbBike = Integer.toString(object.getInt("bike_stands"));
-                        JSONObject position = object.getJSONObject("position");
-                        Double latitude = position.getDouble("lat");
-                        Double longitude = position.getDouble("lng");
-                        stationDAO.addStation(new Station(i,adresse,0,latitude,longitude));
-                        items.add(new OverlayItem(adresse, nbBike, new GeoPoint(latitude,longitude))); // Lat/Lon decimal degrees
+                        JSONObject obj = json.getJSONObject(i);
+                        String ville = obj.getString("name");
+
+                        //ajout de la ville en bdd
+                        villeDAO.addVille(new Ville(i, ville));
+
+                        villes.add(ville);
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
                 }
-            } catch (JSONException e) {
+            }catch(JSONException e){
                 e.printStackTrace();
             }
+
+            //Récupération des stations de chaques villes
+            for (String ville: villes) {
+                try {
+                    String url = "https://api.jcdecaux.com/vls/v1/stations?contract="+ ville +"&apiKey=7886a12c53604b2668a08582a04795afcc9375b0";
+
+                    String jsonLocation = null;
+                    GetData gl = new GetData();
+                    try {
+                        jsonLocation = gl.execute(url).get();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    } catch (ExecutionException e) {
+                        e.printStackTrace();
+                    }
+                    JSONArray json = new JSONArray(jsonLocation);
+                    for (int i = 0; i < json.length(); ++i){
+                        try {
+                            JSONObject object = json.getJSONObject(i);
+                            String adresse = object.getString("address");
+                            String nbBike = Integer.toString(object.getInt("bike_stands"));
+                            JSONObject position = object.getJSONObject("position");
+                            Double latitude = position.getDouble("lat");
+                            Double longitude = position.getDouble("lng");
+
+                            //ajout station bdd
+                            stationDAO.addStation(new Station(i,adresse,Integer.parseInt(nbBike),latitude,longitude));
+                            //ajou item pour pointeur map
+                            items.add(new OverlayItem(adresse, nbBike, new GeoPoint(latitude,longitude))); // Lat/Lon decimal degrees
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+
+
+        }else{
+            Log.d("VERIF","NO INTERNET");
+
+            Cursor bdStations;
+            bdStations = stationDAO.getStations();
+
+            // Listing des enregistrements de la table
+            if (bdStations.moveToFirst())
+            {
+                do {
+                    items.add(new OverlayItem(bdStations.getString(bdStations.getColumnIndex(StationDAO.KEY_ADRESSE_STATION)),
+                            (bdStations.getString(bdStations.getColumnIndex(StationDAO.KEY_ADRESSE_STATION))),
+                            new GeoPoint(Double.valueOf(bdStations.getString(bdStations.getColumnIndex(StationDAO.KEY_LATTITUDE_STATION))),
+                                    Double.valueOf(bdStations.getString(bdStations.getColumnIndex(StationDAO.KEY_LONGITUDE_STATION))))));
+                }
+                while (bdStations.moveToNext());
+            }
+            bdStations.close(); // fermeture du curseur
+
         }
+
 
         //Points sur la map
         ItemizedOverlayWithFocus<OverlayItem> mOverlay = new ItemizedOverlayWithFocus<OverlayItem>(items,
@@ -158,6 +193,13 @@ public class MainActivity extends AppCompatActivity {
         mapController.setCenter(startPoint);
         villeDAO.close();
         stationDAO.close();
+    }
+
+    private boolean isNetworkAvailable() {
+        ConnectivityManager connectivityManager
+                = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo();
+        return activeNetworkInfo != null && activeNetworkInfo.isConnected();
     }
 
     @Override

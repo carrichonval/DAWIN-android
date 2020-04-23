@@ -4,6 +4,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.util.Log;
 
 class VilleDAO {
 
@@ -70,7 +71,6 @@ class VilleDAO {
     }
 
     public Ville getVille(int id) {
-        // Retourne l'animal dont l'id est passé en paramètre
 
         Ville a=new Ville(0,"");
 
@@ -87,6 +87,11 @@ class VilleDAO {
     public Cursor getVilles() {
         // sélection de tous les enregistrements de la table
         return db.rawQuery("SELECT * FROM "+TABLE_NAME, null);
+    }
+
+    public void dropVilles(){
+        Log.d("VERIF","DROP VILLE");
+        db.execSQL("DELETE FROM "+VilleDAO.TABLE_NAME+ ";");
     }
 
 }

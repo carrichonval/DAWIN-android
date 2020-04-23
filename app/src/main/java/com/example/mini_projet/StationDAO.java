@@ -4,6 +4,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.util.Log;
 
 class StationDAO {
 
@@ -82,7 +83,6 @@ class StationDAO {
     }
 
     public Station getStation(int id) {
-        // Retourne l'animal dont l'id est passé en paramètre
 
         Station s=new Station(0,"",0,0,0);
 
@@ -102,5 +102,12 @@ class StationDAO {
         // sélection de tous les enregistrements de la table
         return db.rawQuery("SELECT * FROM "+TABLE_NAME, null);
     }
+
+    public void dropStations(){
+        Log.d("VERIF","DROP station");
+        db.execSQL("DELETE FROM "+StationDAO.TABLE_NAME+ ";");
+    }
+
+
 
 }
